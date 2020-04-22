@@ -17,7 +17,12 @@ void lessHysteresisThreshold(int, int);
 void moreHysteresisThreshold();
 Mat combineImage();
 
-Mat oriImage, bluredImage, edgeMagImage, edgeAngImage, thinEdgeImage, thresholdImage;
+
+Mat oriImage, bluredImage;
+Mat EMImage; // edgeMag
+Mat EAImage; // edgeAng
+Mat TEImage; // thinEdge
+Mat thresholdImage;
 Mat lowTho, highTho, sobelX, sobelY;
 int *gaussianMask, maskRad, maskWidth = 0, maskSum = 0;
 float sigma = 0.0, avgGradient = 0.0, var = 0.0;
@@ -61,11 +66,11 @@ int main(int argc, char** argv)
         //release memory
         free(gaussianMask);
         bluredImage.setTo(Scalar(0));
-        edgeMagImage.setTo(Scalar(0));
+        EMImage.setTo(Scalar(0));
         sobelY.setTo(Scalar(0));
         sobelX.setTo(Scalar(0));
-        edgeAngImage.setTo(Scalar(0));
-        thinEdgeImage.setTo(Scalar(0));
+        EAImage.setTo(Scalar(0));
+        TEImage.setTo(Scalar(0));
         thresholdImage.setTo(Scalar(0));
         sigma = 0.0;
         maskRad = 0;
@@ -171,8 +176,8 @@ void useGaussianBlur()
 
 void getGradientImg()
 {
-    edgeMagImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    edgeAngImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
+    EMImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
+    EAImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
     sobelX = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
     sobelY = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
     
@@ -209,8 +214,8 @@ void getGradientImg()
         {
             if ( i == sobelRad-1 || i == bluredImage.rows-sobelRad || j == sobelRad-1 || j ==bluredImage.cols-sobelRad)
             {
-                edgeMagImage.at<uchar>(i, j) = 0;
-                edgeAngImage.at<uchar>(i, j) = 255;
+                EMImage.at<uchar>(i, j) = 0;
+                EAImage.at<uchar>(i, j) = 255;
                 sobelX.at<uchar>(i,j) = 0;
                 sobelY.at<uchar>(i,j) = 0;
             }
@@ -228,7 +233,7 @@ void getGradientImg()
                 
                 int mag = sqrt(sumX*sumX + sumY*sumY);
                 if (mag > 255)  mag = 255;
-                edgeMagImage.at<uchar>(i, j) = mag;
+                EMImage.at<uchar>(i, j) = mag;
                 
                 sumGradient += mag;
                 //Process sobel X
@@ -266,7 +271,7 @@ void getGradientImg()
                     ang = 90;
                 if ( ( (ang >= 112.5) && (ang < 157.5) ) || ( (ang < -22.5) && (ang >= -67.5) ) )
                     ang = 135;
-                edgeAngImage.at<uchar>(i, j) = ang;
+                EAImage.at<uchar>(i, j) = ang;
 
             }
         }
@@ -281,7 +286,7 @@ void getGradientImg()
     {
         for (int j = 0; j < bluredImage.cols; j++)
         {
-            sumVar += (edgeMagImage.at<uchar>(i,j) -avgGradient) * (edgeMagImage.at<uchar>(i,j) -avgGradient);
+            sumVar += (EMImage.at<uchar>(i,j) -avgGradient) * (EMImage.at<uchar>(i,j) -avgGradient);
         }
     }
     
@@ -291,37 +296,40 @@ void getGradientImg()
 
 void nonMaxSuppress()
 {
-    thinEdgeImage = edgeMagImage.clone();
+    TEImage = EMImage.clone();
+    int m = TEImage.rows, n = TEImage.cols;
     
-    for (int i = 0; i < thinEdgeImage.rows; i++)
+    for (int i = 0; i < m; i++)
     {
-        for (int j = 0; j < thinEdgeImage.cols; j++)
+        for (int j = 0; j < n; j++)
         {
-            if ( i == 0 || i == thinEdgeImage.rows-1 || j == 0 || j == thinEdgeImage.cols-1){
-                thinEdgeImage.at<uchar>(i, j) = 0;
+            if ( i == 0 || i == m - 1 || j == 0 || j == n - 1){
+                TEImage.at<uchar>(i, j) = 0;
             }
             else
             {
-                //0 degree direction, left and right
-                if (edgeAngImage.at<uchar>(i, j) == 0) {
-                    if ( edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i, j+1) || edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i, j-1) )
-                        thinEdgeImage.at<uchar>(i, j) = 0;
-                }
-                //45 degree direction,up right and down left
-                if (edgeAngImage.at<uchar>(i, j) == 45) {
-                    if ( edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i+1, j-1) || edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i-1, j+1) )
-                        thinEdgeImage.at<uchar>(i, j) = 0;
-                }
-                //90 degree direction, up and down
-                if (edgeAngImage.at<uchar>(i, j) == 90) {
-                    if ( edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i+1, j) || edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i-1, j) )
-                        thinEdgeImage.at<uchar>(i, j) = 0;
-                }
-                //135 degree direction, up left and down right
-                if (edgeAngImage.at<uchar>(i, j) == 135) {
-                    if ( edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i-1, j-1) || edgeMagImage.at<uchar>(i, j) < edgeMagImage.at<uchar>(i+1, j+1) )
-                        thinEdgeImage.at<uchar>(i, j) = 0;
-                }
+            	switch(EAImage.at<uchar>(i, j)){
+            		//0 degree direction, left and right
+				    case 0:
+				       	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j+1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j-1) )
+                        	TEImage.at<uchar>(i, j) = 0;
+				       	break; 
+				    //45 degree direction,up right and down left
+				    case 45:
+				       	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j+1) )
+                        	TEImage.at<uchar>(i, j) = 0;
+				       	break; 
+				    //90 degree direction, up and down
+				    case 90:
+				    	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j) )
+                        	TEImage.at<uchar>(i, j) = 0;
+                        break;
+				    //135 degree direction, up left and down right
+				    case 135:
+				    	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j+1) )
+                        	TEImage.at<uchar>(i, j) = 0;
+                    	break;
+				}
             }
         }
     }
@@ -518,9 +526,9 @@ Mat combineImage()
     putText(extraImage, sigmaChar, Point(65,56), FONT_HERSHEY_PLAIN, 1, Scalar(0));
     
     hconcat(oriImage, bluredImage, h1CombineImage);
-    hconcat(h1CombineImage, edgeMagImage, h1CombineImage);
+    hconcat(h1CombineImage, EMImage, h1CombineImage);
     hconcat(h1CombineImage, sobelY, h1CombineImage);
-    hconcat(thinEdgeImage, thresholdImage, h2CombineImage);
+    hconcat(TEImage, thresholdImage, h2CombineImage);
     hconcat(h2CombineImage, extraImage, h2CombineImage);
     hconcat(h2CombineImage, sobelX, h2CombineImage);
     vconcat(h1CombineImage, h2CombineImage, allImage);
