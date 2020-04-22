@@ -1,5 +1,5 @@
 ### EC526 Final Project Edge Detection with Canny algorithm
 
-Pat Rick  
+Pat Rick Ntwari  
 Mingdao Che  
 Fuyao Wang  
