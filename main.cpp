@@ -25,7 +25,7 @@ float sigma = 0.0, avgGradient = 0.0, var = 0.0;
 int main(int argc, char** argv)
 {
     Mat combinedImage;
-    oriImage = imread("./image/lena.jpg", 0);
+    oriImage = imread("./lena.jpg", 0);
     
     bool isNewSigma = true;
     while (isNewSigma)
