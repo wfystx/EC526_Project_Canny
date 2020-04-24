@@ -1,12 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
-#include <opencv2/highgui.hpp>
-
-#define mode 1// 0 for sobel, 1 for less, 2 for more
+#include <iostream>
+#include <fstream>
+#include "opencv2/core.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/highgui.hpp"
+/*
+#include "C:/Users/acer/Documents/opencv/modules/core/include/opencv2/core.hpp" 
+#include "C:/Users/acer/Documents/opencv/modules/imgproc/include/opencv2/imgproc.hpp" 
+#include "C:/Users/acer/Documents/opencv/modules/highgui/include/opencv2/highgui.hpp" 
+*/
+#define mode 0// 0 for sobel, 1 for less, 2 for more
 
 using namespace cv;
+using namespace std;
 
 void createGaussianKernel(int);
 void cannyDector();
@@ -17,8 +24,16 @@ void lessHysteresisThreshold(int, int);
 void moreHysteresisThreshold();
 Mat combineImage();
 
+bool checkExistence(std::string filename)
+{
+    ifstream f;
+    f.open(filename);
 
-Mat oriImage, bluredImage;
+    return f.is_open();
+}
+
+Mat OImage; // Original 
+Mat BImage; // blured
 Mat EMImage; // edgeMag
 Mat EAImage; // edgeAng
 Mat TEImage; // thinEdge
@@ -27,31 +42,53 @@ Mat lowTho, highTho, sobelX, sobelY;
 int *gaussianMask, maskRad, maskWidth = 0, maskSum = 0;
 float sigma = 0.0, avgGradient = 0.0, var = 0.0;
 
+
 int main(int argc, char** argv)
 {
     Mat combinedImage;
-    oriImage = imread("./image/lena.jpg", 0);
+    Mat outs;	
+	
+	string filename = "image/lena.jpg";
+	//string filename = "‪/mnt/c/Users/acer/Pictures/NDENG.jpg";
+    OImage = imread(filename, 0);
     
+	cout << "Existence "<< checkExistence(filename) << endl;
+	cout << "image height "<< OImage.rows << endl;
+	
     bool isNewSigma = true;
     while (isNewSigma)
     {
         char wndName[] = "Canny Process";
         isNewSigma = false;
         createGaussianKernel(0);
+		cout << "image rows "<< OImage.rows << endl;
         cannyDector();
+		cout << "image columns "<< OImage.rows << endl;
         //combine all images for showing
         combinedImage = combineImage();
         if (combinedImage.rows > 600) {
             resize(combinedImage, combinedImage, Size(combinedImage.cols/1.4,combinedImage.rows/1.4));
         }
-
-        // add from here
-        Mat res;
-        combinedImage.convertTo(res,CV_8UC3,255);
-		imwrite("out.jpg",res);
-        // to here        
-
-        imshow(wndName, combinedImage);
+        cout << "image rowscols "<< OImage.rows << endl;     
+		
+		// to fix graphics issue)
+		Mat res;
+		//combinedImage.convertTo(res,CV_8UC3,255);
+		BImage.convertTo(res,CV_8UC3,255);
+		imwrite("bluredImage.jpg",res);
+		EMImage.convertTo(res,CV_8UC3,255);
+		imwrite("edgeMagImage.jpg",res);
+		EAImage.convertTo(res,CV_8UC3,255);
+		imwrite("edgeAngImage.jpg",res);
+		TEImage.convertTo(res,CV_8UC3,255);
+		imwrite("thinEdgeImage.jpg",res);
+		thresholdImage.convertTo(res,CV_8UC3,255);
+		imwrite("thresholdImage.jpg",res);
+		
+        //imshow(wndName, combinedImage);
+		
+		cout << "image colsrows "<< OImage.rows << endl;   
+		
         waitKey(10);
                 
         char tryNewSigma;
@@ -65,7 +102,7 @@ int main(int argc, char** argv)
         }
         //release memory
         free(gaussianMask);
-        bluredImage.setTo(Scalar(0));
+        BImage.setTo(Scalar(0));
         EMImage.setTo(Scalar(0));
         sobelY.setTo(Scalar(0));
         sobelX.setTo(Scalar(0));
@@ -83,8 +120,11 @@ int main(int argc, char** argv)
 //Create Gaussian Kernel.
 void createGaussianKernel(int widthType)
 {
-    printf("Please input standard deviation(>0) and press Enter: ");
-    scanf("%f", &sigma);
+    //printf("Please input standard deviation(>0) and press Enter: ");
+    //scanf("%f", &sigma);
+	
+	sigma = 1;
+	
     if(sigma < 0.01) sigma = 0.01;
     //compute mask width according to sigma value
     if (widthType == 0) {
@@ -104,6 +144,9 @@ void createGaussianKernel(int widthType)
     int gaussianMaskInt[maskWidth][maskWidth];
     
     maskRad = maskWidth / 2;
+	
+	cout << "maskRad " << maskRad << endl;
+	
     int i, j;
     //construct the gaussian mask
     for(int x = - maskRad; x <= maskRad; x++)
@@ -121,7 +164,7 @@ void createGaussianKernel(int widthType)
             maskSum += gaussianMaskInt[i][j];
         }
     }
-    
+    cout << " maskSum "<< maskSum << endl;
     //printf("Mask Sum is %d, rad is %d.\n", maskSum, maskRad);
     //represent mask using global pointer
     for(i = 0; i <  maskWidth; i++)
@@ -131,9 +174,9 @@ void createGaussianKernel(int widthType)
 
 void cannyDector()
 {
-    useGaussianBlur();
-    getGradientImg();
-    nonMaxSuppress();
+    useGaussianBlur();				//Pat Rick 
+    getGradientImg();				//Mingdao
+    nonMaxSuppress();				//Fuyao
     
     if (mode == 1) {
         int highTh = 0;
@@ -148,38 +191,53 @@ void cannyDector()
     }
 
 }
-//For the border, keep the pixel unchanged
+
+//****** PERFORM BLURRING **** USING GAUSSIAN DISTRIB **** STD DEV OF 1 ***********
 void useGaussianBlur()
 {
-    //keep border pixel unchanged
-    bluredImage = oriImage.clone();
-    //Convolutuion process, image*mask
-    for (int i = 0; i < oriImage.rows; i++)
-    {
-        for (int j = 0; j < oriImage.cols; j++)
-        {
-            if ( (i >= maskRad)&&(i <= oriImage.rows-maskRad)&&(j >= maskRad)&&(j<=oriImage.cols-maskRad) )
-            {
-                double sum = 0;
-                
-                for (int x = 0; x < maskWidth; x++)
-                    for (int y = 0; y < maskWidth; y++)
-                    {
-                        sum += *(gaussianMask + x*maskWidth + y) * (double)(oriImage.at<uchar>(i + x - maskRad, j + y - maskRad));
+	// # of rows and cols
+	int rs = OImage.rows;
+	int cs = OImage.cols;
+	
+	int ost = 2;
+	
+	// gaussian kernel with standard deviation of 1 along with the sum of elements 
+	const int8_t kernel[] = {1,4,7,4,1, 
+						  4,16,26,16,4,
+						  7,26,41,26,7,
+						  4,16,26,16,4,
+						  1,4,7,4,1};
+	const int kernelDiv = 273;
+	//clone original image						  
+    BImage = OImage.clone();
+
+	//perform convolve
+	for (int i = 0; i < rs; i++){
+        for (int j = 0; j < cs; j++){
+            if ( (i < ost)||(i >= rs-ost)||(j < ost)||(j>=cs-ost)){
+				BImage.at<uchar>(i, j) = OImage.at<uchar>(i, j);
+				continue;
+			}
+                int count = 0;
+				double conv = 0;
+				for (int x = 0; x < (ost*2)+1; x++){
+                    for (int y = 0; y < (ost*2)+1; y++){
+                        conv += kernel[count] * (double)(OImage.at<uchar>(i + x - ost, 
+						j + y - ost));
+						count++;
                     }
-                bluredImage.at<uchar>(i, j) = sum/maskSum;
-            }
-        }
-        
+				}
+                BImage.at<uchar>(i, j) = conv/kernelDiv;
+        } 
     }
 }
 
 void getGradientImg()
 {
-    EMImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    EAImage = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    sobelX = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    sobelY = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
+    EMImage = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
+    EAImage = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
+    sobelX = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
+    sobelY = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
     
     float xMask[3][3],yMask[3][3];
     if (mode == 0) {
@@ -208,11 +266,11 @@ void getGradientImg()
     
     int sumGradient = 0;
     
-    for (int i = 0; i < bluredImage.rows; i++)
+    for (int i = 0; i < BImage.rows; i++)
     {
-        for (int j = 0; j < bluredImage.cols; j++)
+        for (int j = 0; j < BImage.cols; j++)
         {
-            if ( i == sobelRad-1 || i == bluredImage.rows-sobelRad || j == sobelRad-1 || j ==bluredImage.cols-sobelRad)
+            if ( i == sobelRad-1 || i == BImage.rows-sobelRad || j == sobelRad-1 || j == BImage.cols-sobelRad)
             {
                 EMImage.at<uchar>(i, j) = 0;
                 EAImage.at<uchar>(i, j) = 255;
@@ -227,8 +285,8 @@ void getGradientImg()
                 for (int x = 0; x < sobelWidth; x++)
                     for (int y = 0; y < sobelWidth; y++)
                     {
-                        sumX += xMask[x][y] * bluredImage.at<uchar>(i+x-sobelRad, j+y-sobelRad);
-                        sumY += yMask[x][y] * bluredImage.at<uchar>(i+x-sobelRad, j+y-sobelRad);
+                        sumX += xMask[x][y] * BImage.at<uchar>(i+x-sobelRad, j+y-sobelRad);
+                        sumY += yMask[x][y] * BImage.at<uchar>(i+x-sobelRad, j+y-sobelRad);
                     }
                 
                 int mag = sqrt(sumX*sumX + sumY*sumY);
@@ -277,25 +335,26 @@ void getGradientImg()
         }
     }
     
-    avgGradient = float(sumGradient) / float(bluredImage.cols * bluredImage.rows);
+    avgGradient = float(sumGradient) / float(BImage.cols * BImage.rows);
     printf("average gradient: %.2f\n", avgGradient);
     
     float sumVar = 0;
     
-    for (int i = 0; i < bluredImage.rows; i++)
+    for (int i = 0; i < BImage.rows; i++)
     {
-        for (int j = 0; j < bluredImage.cols; j++)
+        for (int j = 0; j < BImage.cols; j++)
         {
             sumVar += (EMImage.at<uchar>(i,j) -avgGradient) * (EMImage.at<uchar>(i,j) -avgGradient);
         }
     }
     
-    var = sqrt(sumVar / (bluredImage.cols * bluredImage.rows));
+    var = sqrt(sumVar / (BImage.cols * BImage.rows));
     printf("average gradient: %.2f\n", var);
 }
 
 void nonMaxSuppress()
 {
+	cout << "performing nonMaxSuppress" << endl;
     TEImage = EMImage.clone();
     int m = TEImage.rows, n = TEImage.cols;
     
@@ -308,28 +367,28 @@ void nonMaxSuppress()
             }
             else
             {
-            	switch(EAImage.at<uchar>(i, j)){
-            		//0 degree direction, left and right
-				    case 0:
-				       	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j+1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j-1) )
-                        	TEImage.at<uchar>(i, j) = 0;
-				       	break; 
-				    //45 degree direction,up right and down left
-				    case 45:
-				       	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j+1) )
-                        	TEImage.at<uchar>(i, j) = 0;
-				       	break; 
-				    //90 degree direction, up and down
-				    case 90:
-				    	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j) )
-                        	TEImage.at<uchar>(i, j) = 0;
+                switch(EAImage.at<uchar>(i, j)){
+                    //0 degree direction, left and right
+                    case 0:
+                        if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j+1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i, j-1) )
+                            TEImage.at<uchar>(i, j) = 0;
+                        break; 
+                    //45 degree direction,up right and down left
+                    case 45:
+                        if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j+1) )
+                            TEImage.at<uchar>(i, j) = 0;
+                        break; 
+                    //90 degree direction, up and down
+                    case 90:
+                        if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j) )
+                            TEImage.at<uchar>(i, j) = 0;
                         break;
-				    //135 degree direction, up left and down right
-				    case 135:
-				    	if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j+1) )
-                        	TEImage.at<uchar>(i, j) = 0;
-                    	break;
-				}
+                    //135 degree direction, up left and down right
+                    case 135:
+                        if ( EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i-1, j-1) || EMImage.at<uchar>(i, j) < EMImage.at<uchar>(i+1, j+1) )
+                            TEImage.at<uchar>(i, j) = 0;
+                        break;
+                }
             }
         }
     }
@@ -337,15 +396,15 @@ void nonMaxSuppress()
 
 void lessHysteresisThreshold(int lowTh, int highTh)
 {
-    thresholdImage = thinEdgeImage.clone();
+    thresholdImage = TEImage.clone();
     
     for (int i=0; i<thresholdImage.rows; i++)
     {
         for (int j = 0; j<thresholdImage.cols; j++)
         {
-            if(thinEdgeImage.at<uchar>(i,j) > highTh)
+            if(TEImage.at<uchar>(i,j) > highTh)
                 thresholdImage.at<uchar>(i,j) = 255;
-            else if(thinEdgeImage.at<uchar>(i,j) < lowTh)
+            else if(TEImage.at<uchar>(i,j) < lowTh)
                 thresholdImage.at<uchar>(i,j) = 0;
             else
             {
@@ -359,13 +418,13 @@ void lessHysteresisThreshold(int lowTh, int highTh)
                             continue;
                         else
                         {
-                            if (thinEdgeImage.at<uchar>(x,y) > highTh)
+                            if (TEImage.at<uchar>(x,y) > highTh)
                             {
                                 thresholdImage.at<uchar>(i,j) = 255;
                                 isHigher = true;
                                 break;
                             }
-                            else if (thinEdgeImage.at<uchar>(x,y) <= highTh && thinEdgeImage.at<uchar>(x,y) >= lowTh)
+                            else if (TEImage.at<uchar>(x,y) <= highTh && TEImage.at<uchar>(x,y) >= lowTh)
                                 doConnect = true;
                         }
                     }
@@ -380,7 +439,7 @@ void lessHysteresisThreshold(int lowTh, int highTh)
                                 continue;
                             else
                             {
-                                if (thinEdgeImage.at<uchar>(x,y) > highTh)
+                                if (TEImage.at<uchar>(x,y) > highTh)
                                 {
                                     thresholdImage.at<uchar>(i,j) = 255;
                                     isHigher = true;
@@ -398,22 +457,32 @@ void lessHysteresisThreshold(int lowTh, int highTh)
 
 void moreHysteresisThreshold()
 {
-    lowTho = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    highTho = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_8UC1);
-    Mat avg = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_32FC1);
-    Mat var = Mat::zeros(bluredImage.rows, bluredImage.cols, CV_32FC1);
+	cout << "performing moreHysteresisThreshold" << endl;
+    lowTho = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
+    highTho = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
+    Mat avg = Mat::zeros(BImage.rows, BImage.cols, CV_32FC1);
+    Mat var = Mat::zeros(BImage.rows, BImage.cols, CV_32FC1);
 
-    for (int i = 0; i < bluredImage.rows; i++) {
-        for (int j = 0; j < bluredImage.cols; j++) {
+	cout << "moreHysteresisThreshold: done initializing" << endl;
+	cout << "avg rows " << avg.rows << " bluredrows " << BImage.rows <<endl;
+	cout << "avg rows " << avg.rows << " edgeMagrows " << EMImage.rows <<endl;
+	//cout << "edgeMagImage.at "  << (int) edgeMagImage.at<uchar>(282, 501) <<endl;
+	
+    for (int i = 0; i < BImage.rows; i++) {
+        for (int j = 0; j < BImage.cols; j++) {
             
             float sumGra = 0;
-            for (int x = i-10; x < i+11; x++) {
-                for (int y = j-10; y < j+11; y++) {
+            // for (int x = i-10; x < i+11; x++) {
+                // for (int y = j-10; y < j+11; y++) {
+            for (int x = i-10; x < i+3; x++) {
+                for (int y = j-10; y < j+3; y++) {
                     float gra;
                     if (x < 0 || y < 0) {
                         gra = 0;
                     }else{
-                        gra = edgeMagImage.at<uchar>(x, y);
+						if (x>EMImage.rows && y>EMImage.cols) 
+						{cout << "x " << x << " y " << y << " image " << (int) EMImage.at<uchar>(x, y) << endl;}
+                        gra = EMImage.at<uchar>(x, y);
                     }
                     
                     sumGra += gra;
@@ -423,18 +492,20 @@ void moreHysteresisThreshold()
             //printf("%0.2f ", avg.at<float>(i,j));
         }
     }
-    
-    for (int i = 0; i < bluredImage.rows; i++) {
-        for (int j = 0; j < bluredImage.cols; j++) {
+	cout << "still performing moreHysteresisThreshold" << endl;
+    for (int i = 0; i < BImage.rows; i++) {
+        for (int j = 0; j < BImage.cols; j++) {
             
             float sumVar = 0;
-            for (int x = i-10; x < i+11; x++) {
-                for (int y = j-10; y < j+11; y++) {
+            // for (int x = i-10; x < i+11; x++) {
+                // for (int y = j-10; y < j+11; y++) {
+            for (int x = i-10; x < i+3; x++) {
+                for (int y = j-10; y < j+3; y++) {
                     float gra;
                     if (x < 0 || y < 0) {
                         gra = 0;
                     }else{
-                        gra = edgeMagImage.at<uchar>(x, y);
+                        gra = EMImage.at<uchar>(x, y);
                     }
                     
                     sumVar += (gra-avg.at<float>(i,j))*(gra-avg.at<float>(i,j));
@@ -444,9 +515,11 @@ void moreHysteresisThreshold()
             //printf("%0.2f ", var.at<float>(i,j));
         }
     }
-    
+	
+    cout << "still performing moreHysteresisThreshold" << endl;
+	
     int lowTh, highTh;
-    thresholdImage = thinEdgeImage.clone();
+    thresholdImage = TEImage.clone();
     
     for (int i=0; i<thresholdImage.rows; i++)
     {
@@ -455,13 +528,13 @@ void moreHysteresisThreshold()
             highTh = int(avg.at<float>(i,j) + 1.1*var.at<float>(i,j));
             lowTh = highTh / 2;
             
-            if (thinEdgeImage.at<uchar>(i,j) < int(avg.at<float>(i,j)/5)) {
+            if (TEImage.at<uchar>(i,j) < int(avg.at<float>(i,j)/5)) {
                 thresholdImage.at<uchar>(i,j) = 0;
             }else{ //added
             
-            if(thinEdgeImage.at<uchar>(i,j) > highTh)
+            if(TEImage.at<uchar>(i,j) > highTh)
                 thresholdImage.at<uchar>(i,j) = 255;
-            else if(thinEdgeImage.at<uchar>(i,j) < lowTh)
+            else if(TEImage.at<uchar>(i,j) < lowTh)
                 thresholdImage.at<uchar>(i,j) = 0;
             else
             {
@@ -475,13 +548,13 @@ void moreHysteresisThreshold()
                             continue;
                         else
                         {
-                            if (thinEdgeImage.at<uchar>(x,y) > highTh)
+                            if (TEImage.at<uchar>(x,y) > highTh)
                             {
                                 thresholdImage.at<uchar>(i,j) = 255;
                                 isHigher = true;
                                 break;
                             }
-                            else if (thinEdgeImage.at<uchar>(x,y) <= highTh && thinEdgeImage.at<uchar>(x,y) >= lowTh)
+                            else if (TEImage.at<uchar>(x,y) <= highTh && TEImage.at<uchar>(x,y) >= lowTh)
                                 doConnect = true;
                         }
                     }
@@ -496,7 +569,7 @@ void moreHysteresisThreshold()
                                 continue;
                             else
                             {
-                                if (thinEdgeImage.at<uchar>(x,y) > highTh)
+                                if (TEImage.at<uchar>(x,y) > highTh)
                                 {
                                     thresholdImage.at<uchar>(i,j) = 255;
                                     isHigher = true;
@@ -508,7 +581,7 @@ void moreHysteresisThreshold()
                     }
                 if (!isHigher)   thresholdImage.at<uchar>(i,j) = 0;
             }
-            }//added
+            }
         }
     }
 }
@@ -516,7 +589,7 @@ void moreHysteresisThreshold()
 Mat combineImage()
 {
     Mat h1CombineImage, h2CombineImage, allImage;
-    Mat extraImage = Mat(oriImage.rows, oriImage.cols, CV_8UC1, Scalar(255));
+    Mat extraImage = Mat(OImage.rows, OImage.cols, CV_8UC1, Scalar(255));
     char sigmaChar[10];
     sprintf(sigmaChar, "%.2f", sigma);
     
@@ -525,7 +598,7 @@ Mat combineImage()
     putText(extraImage, "Sigma: ", Point(10,56), FONT_HERSHEY_PLAIN, 1, Scalar(0));
     putText(extraImage, sigmaChar, Point(65,56), FONT_HERSHEY_PLAIN, 1, Scalar(0));
     
-    hconcat(oriImage, bluredImage, h1CombineImage);
+    hconcat(OImage, BImage, h1CombineImage);
     hconcat(h1CombineImage, EMImage, h1CombineImage);
     hconcat(h1CombineImage, sobelY, h1CombineImage);
     hconcat(TEImage, thresholdImage, h2CombineImage);
