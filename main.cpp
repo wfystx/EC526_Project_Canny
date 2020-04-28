@@ -24,20 +24,18 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
-#include "kernels.h" // Head file for differnt kernals of gradient calculation.
-#include "opencv2/core.hpp"  //OpenCV lib. 
-#include "opencv2/imgproc.hpp" //OpenCV lib.
-#include "opencv2/highgui.hpp" //OpenCV lib. 
-#include "omp.h" // OpenMP head file.
-
-
+#include "opencv2/core.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/highgui.hpp"
 /*
-	Global constant Delaration.
+#include "C:/Users/acer/Documents/opencv/modules/core/include/opencv2/core.hpp" 
+#include "C:/Users/acer/Documents/opencv/modules/imgproc/include/opencv2/imgproc.hpp" 
+#include "C:/Users/acer/Documents/opencv/modules/highgui/include/opencv2/highgui.hpp" 
 */
-#define M_PI 3.14159265358979323846
-#define mode 1// 1 for sobel, 2 for prewitt, 3 for Robert, 4 for 5X Sobel, else scharr
+#define mode 0// 0 for sobel, 1 for less, 2 for more
 
 using namespace cv;
+using namespace std;
 
 /*
   Function Delaration.
@@ -69,6 +67,7 @@ Mat thresholdImage; // thinEdge Image Mat
 Mat lowTho, highTho, sobelX, sobelY;
 int *gaussianMask, maskRad, maskWidth = 0, maskSum = 0;
 float sigma = 0.0, avgGradient = 0.0, var = 0.0;
+
 
 int main(int argc, char** argv)
 {
