@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 	Mat outs;
 	int coreNum = omp_get_num_procs(); // Show the process of parallel
 	std::cout << "The number of processes:"<< coreNum <<std::endl;
-	string filename = "./lena.jpg";
+	string filename = "./image/lena.jpg";
 	OImage = imread(filename, 0);
 	
 	printf("Existence: %d\n", checkExistence(filename));
