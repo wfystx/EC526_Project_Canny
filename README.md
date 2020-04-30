@@ -13,7 +13,12 @@
 
 - OpenMP
 
+- Visual Studio 2017
+
 ### Usage
+- Install the Visual Studio Correctly.
+- Set OpenMP and OpenCV environment and link the to the Visual Studio 2017.
+- Build the executive file for windows and processing the image
 
 ### Original Picture
 
@@ -25,7 +30,7 @@
 ![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/general_3.PNG) 
 ![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/sobel_prewitt.PNG) 
 ![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/Sobel_Robert.PNG) 
-![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/running_time.PNG) 
+![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/table.PNG) 
 
 ### Authors
 
