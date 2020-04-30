@@ -16,10 +16,10 @@
 - Visual Studio 2017
 
 ### Usage
-- Install the Visual Studio Correctly.
-- Set OpenMP and OpenCV environment and link the to the Visual Studio 2017.
+- [Install the Visual Studio Correctly.](https://docs.microsoft.com/en-us/visualstudio/install/install-visual-studio?view=vs-2019)
+- Set OpenMP and OpenCV environment and link the to the Visual Studio 2017.["opencv"](https://docs.opencv.org/master/dd/d6e/tutorial_windows_visual_studio_opencv.html) ["openMP"](https://docs.microsoft.com/en-us/cpp/parallel/openmp/openmp-in-visual-cpp?view=vs-2019)
 - Build the executive file for windows and processing the image
-
+![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/output.PNG) 
 ### Original Picture
 
 ![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/phanSneeze.jpg) 
