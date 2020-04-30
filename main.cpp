@@ -113,10 +113,7 @@ void CannyProcess()
 	auto end = chrono::high_resolution_clock::now();
 	auto time = chrono::duration_cast<chrono::microseconds>(end - begin);
 	cout << "Time elapsed (/microseconds): " << time.count() << endl;
-	int highthreshold = 0;
-	highthreshold = avgGradient + 1.2 * var;
-	printf("low: %d high: %d \n", int(highthreshold / 2), highthreshold);
-	DoubleThreshold_Hysteresis(int(highthreshold / 2), highthreshold);
+
 	DoubleThreshold_Hysteresis(13, 25);
 
 }
