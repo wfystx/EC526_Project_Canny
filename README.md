@@ -17,7 +17,7 @@
 
 ### Original Picture
 
-[image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/phanSneeze.jpg) 
+![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/phanSneeze.jpg) 
 
 ### Outputs
 ![image](https://github.com/wfystx/EC526_Project_Canny/blob/master/Documents/Readme_Images/general_1.PNG) 
