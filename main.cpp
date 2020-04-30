@@ -24,15 +24,19 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
-#include "opencv2/core.hpp"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/highgui.hpp"
+#include <chrono>
+#include "kernels.h" // Head file for differnt kernals of gradient calculation.
+#include "opencv2/core.hpp"  //OpenCV lib. 
+#include "opencv2/imgproc.hpp" //OpenCV lib.
+#include "opencv2/highgui.hpp" //OpenCV lib. 
+#include "omp.h" // OpenMP head file.
+#include "mpi.h" // MPI head file
+
 /*
-#include "C:/Users/acer/Documents/opencv/modules/core/include/opencv2/core.hpp" 
-#include "C:/Users/acer/Documents/opencv/modules/imgproc/include/opencv2/imgproc.hpp" 
-#include "C:/Users/acer/Documents/opencv/modules/highgui/include/opencv2/highgui.hpp" 
+	Global constant Delaration.
 */
-#define mode 0// 0 for sobel, 1 for less, 2 for more
+#define M_PI 3.14159265358979323846
+#define mode 4// 1 for sobel, 2 for prewitt, 3 for Robert, 4 for 5X Sobel, else scharr
 
 using namespace cv;
 using namespace std;
@@ -41,18 +45,15 @@ using namespace std;
   Function Delaration.
 */
 bool checkExistence(string filename); // Check whether image exists.
-void createGaussianKernel(int); // Generate gaussian kernal for blurring.
-void cannyDector(); // Canny dector.
-void useGaussianBlur();
-void getGradientImg();
-void nonMaxSuppress();
-void lessHysteresisThreshold(int, int);
-void moreHysteresisThreshold();
+void CannyProcess(); // Canny dector.
+void GaussianBlur_sigma();
+void Gradient_Images();
+void NonMaxSuppress();
+void DoubleThreshold_Hysteresis(int, int);
 void convuloution(float** x, float** y, int sobelRad, int sobelWidth); // colvolution for 3X3.
-void convuloution_2(float** x, float** y, int sobelRad, int sobelWidth);  // colvolution for 5X5.
+void convuloution_2(float** x, float** y, int sobelRad, int sobelWidth);  // colvolution for 2X2.
 void convuloution_5(float** x, float** y, int sobelRad, int sobelWidth); // colvolution for 5X5.
 float** matrixgenerator(int col, int row);
-Mat combineImage();
 
 
 /*
@@ -63,167 +64,64 @@ Mat BImage; // blured Image Mat
 Mat EMImage; // edgeMag Image Mat
 Mat EAImage; // edgeAng Image Mat
 Mat TEImage; // thinEdge Image Mat
-Mat thresholdImage; // thinEdge Image Mat
-Mat lowTho, highTho, sobelX, sobelY;
-int *gaussianMask, maskRad, maskWidth = 0, maskSum = 0;
-float sigma = 0.0, avgGradient = 0.0, var = 0.0;
-
+Mat DTImage; // Threshold Edge Image Mat
+int Convert_Radius, KernelWidth = 0;
+float avgGradient = 0.0, var = 0.0;
 
 int main(int argc, char** argv)
 {
-	Mat combinedImage;
 	Mat outs;
-	int coreNum = omp_get_num_procs(); // Show the process of parallel
-	std::cout << "The number of processes:"<< coreNum <<std::endl;
-	string filename = "./image/lena.jpg";
+	//int coreNum = omp_get_num_procs(); // Show the process of parallel
+	//std::cout << "The number of processes:"<< coreNum <<std::endl;
+	string filename = "./image/phanSneeze.jpg";
 	OImage = imread(filename, 0);
 	
+	printf("-----------------------Program---Start---------------------------------\n");
 	printf("Existence: %d\n", checkExistence(filename));
 	printf("Image Size: %d X %d\n", OImage.rows, OImage.cols);
-	//std::cout << "Existence " << checkExistence(filename) << endl;
-	//std::cout << "image height " << OImage.rows << endl;
-
-	bool isNewSigma = true;
-	while (isNewSigma)
-	{
-		char wndName[] = "Canny Process";
-		isNewSigma = false;
-		createGaussianKernel(0);
-		cannyDector();
-		imwrite("./TEImage_sobel.jpg", TEImage);
-		//combine all images for showing
-		//combinedImage = combineImage();
-		//if (combinedImage.rows > 600) {
-		//	resize(combinedImage, combinedImage, Size(combinedImage.cols / 1.4, combinedImage.rows / 1.4));
-		//}
-
-				// to fix graphics issue)
-		Mat res;
-		//combinedImage.convertTo(res,CV_8UC3,255);
-		BImage.convertTo(res, CV_8UC3, 255);
-		imwrite("bluredImage.jpg", res);
-		EMImage.convertTo(res, CV_8UC3, 255);
-		imwrite("edgeMagImage.jpg", res);
-		EAImage.convertTo(res, CV_8UC3, 255);
-		imwrite("edgeAngImage.jpg", res);
-		TEImage.convertTo(res, CV_8UC3, 255);
-		imwrite("thinEdgeImage.jpg", res);
-		thresholdImage.convertTo(res, CV_8UC3, 255);
-		imwrite("thresholdImage.jpg", res);
-
-		//imshow(wndName, combinedImage);
-		//waitKey(10);
-
-		//char tryNewSigma;
-		//printf("Do you want to try other sigma?(Y/N): ");
-		//scanf_s("%s", &tryNewSigma);
-		//if (tryNewSigma == 'y' || tryNewSigma == 'Y') {
-		//	isNewSigma = true;
-		//	printf("\n-------------Please Try Another Sigma-------------\n");
-		//	destroyWindow(wndName);
-		//	combinedImage.release();
-		//}
-		//release memory
-		free(gaussianMask);
-		BImage.setTo(Scalar(0));
-		EMImage.setTo(Scalar(0));
-		sobelY.setTo(Scalar(0));
-		sobelX.setTo(Scalar(0));
-		EAImage.setTo(Scalar(0));
-		TEImage.setTo(Scalar(0));
-		thresholdImage.setTo(Scalar(0));
-		sigma = 0.0;
-		maskRad = 0;
-		maskWidth = 0;
-		maskSum = 0;
-	}
-	printf("-------Program End-------\n");
+	printf("-----------------------------------------------------------------------\n");
+	printf("-----------------------Canny---Process---------------------------------\n");
+	CannyProcess();
+	printf("-----------------------------------------------------------------------\n");
+	printf("----------------------Image----Storage---------------------------------\n");
+	imwrite("OImage.jpg", OImage);
+	imwrite("BImage.jpg", BImage);
+	imwrite("EMImage.jpg", EMImage);
+	imwrite("EAImage.jpg", EAImage);
+	imwrite("TEImage.jpg", TEImage);
+	imwrite("DTImage.jpg", DTImage);
+	printf("-----------------------------------------------------------------------\n");
+	//release memory
+	BImage.setTo(Scalar(0));
+	EMImage.setTo(Scalar(0));
+	EAImage.setTo(Scalar(0));
+	TEImage.setTo(Scalar(0));
+	DTImage.setTo(Scalar(0));
+	Convert_Radius = 0;
+	KernelWidth = 0;
+	printf("-----------------------Program----End------------------------ ---------\n");
 	return 0;
 }
-//Create Gaussian Kernel.
-void createGaussianKernel(int widthType)
-{
-	//printf("Please input standard deviation(>0) and press Enter: ");
-	//scanf_s("%f", &sigma);
-	sigma = 1;
 
-	if (sigma < 0.01) sigma = 0.01;
-	//compute mask width according to sigma value
-	if (widthType == 0) {
-		//For canny
-		maskWidth = int((sigma - 0.01) * 3) * 2 + 1;
-	}
-	else if (widthType == 1) {
-		//for LoG
-		maskWidth = 5;
-	}
 
-	if (maskWidth < 1)   maskWidth = 1;
-	printf("Sigma is %.2f, Mask Width is %d.\n", sigma, maskWidth);
-	//declare mask as dynamic memory
-	gaussianMask = (int*)malloc(maskWidth * maskWidth * sizeof(int));
-
-	//double gaussianMaskDou[maskWidth][maskWidth], maskMin = 0.0;
-	//int gaussianMaskInt[maskWidth][maskWidth];
-	double maskMin = 0.0;
-	double** gaussianMaskDou = new double*[maskWidth];
-	int** gaussianMaskInt = new int*[maskWidth];
-
-	for (int index = 0; index < maskWidth; index++)
-	{
-		gaussianMaskDou[index] = new double[maskWidth];
-		gaussianMaskInt[index] = new int[maskWidth];
-	}
-
-	maskRad = maskWidth / 2;
-	int i, j;
-	//construct the gaussian mask
-	for (int x = -maskRad; x <= maskRad; x++)
-	{
-		for (int y = -maskRad; y <= maskRad; y++)
-		{
-			i = x + maskRad;
-			j = y + maskRad;
-			//gaussian 2d function
-			gaussianMaskDou[i][j] = exp((x*x + y * y) / (-2 * sigma*sigma));
-			//min value of mask is the first one
-			if (i == 0 && j == 0)  maskMin = gaussianMaskDou[0][0];
-			//convert mask value double to integer
-			gaussianMaskInt[i][j] = cvRound(gaussianMaskDou[i][j] / maskMin);
-			maskSum += gaussianMaskInt[i][j];
-		}
-	}
-
-	//printf("Mask Sum is %d, rad is %d.\n", maskSum, maskRad);
-	//represent mask using global pointer
-	for (i = 0; i < maskWidth; i++)
-		for (j = 0; j < maskWidth; j++)
-			*(gaussianMask + i * maskWidth + j) = gaussianMaskInt[i][j];
-}
-
-void cannyDector()
-{
-	useGaussianBlur(); //gaussian blurring
-
-	getGradientImg(); // gradient calculation 
-	nonMaxSuppress(); // non maximun suppression
-
-	if (mode == 1) {
-		int highTh = 0;
-		highTh = avgGradient + 1.2 * var;
-		printf("low: %d high: %d \n", int(highTh / 2), highTh);
-		//lessHysteresisThreshold(int(highTh / 2), highTh);
-		//lessHysteresisThreshold(25, 50);
-	}
-	//else if (mode == 2) {
-	//	moreHysteresisThreshold();
-	//}
-	//else if (mode == 0) {
-	//	lessHysteresisThreshold(32, 64);
-	//}
+void CannyProcess()
+{	
+	auto begin = chrono::high_resolution_clock::now();
+	GaussianBlur_sigma(); //gaussian blurring
+	Gradient_Images(); // gradient calculation 
+	NonMaxSuppress(); // non maximun suppression
+	auto end = chrono::high_resolution_clock::now();
+	auto time = chrono::duration_cast<chrono::microseconds>(end - begin);
+	cout << "Time elapsed (/microseconds): " << time.count() << endl;
+	int highthreshold = 0;
+	highthreshold = avgGradient + 1.2 * var;
+	printf("low: %d high: %d \n", int(highthreshold / 2), highthreshold);
+	DoubleThreshold_Hysteresis(int(highthreshold / 2), highthreshold);
+	DoubleThreshold_Hysteresis(13, 25);
 
 }
-void useGaussianBlur()
+
+void GaussianBlur_sigma()
 {
 	// # of rows and cols
 	int rs = OImage.rows;
@@ -238,10 +136,19 @@ void useGaussianBlur()
 						  4,16,26,16,4,
 						  1,4,7,4,1 };
 	const int kernelDiv = 273;
+
+	const int8_t kernel14[] = { 2,4,5,4,2,
+						  4,9,12,9,4,
+						  5,12,15,12,5,
+						  4,9,12,9,4,
+						  2,4,5,4,2 };
+	const int kernelDiv114 = 115;
+
 	//clone original image						  
 	BImage = OImage.clone();
 
 	//perform convolve
+	#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < rs; i++) {
 		for (int j = 0; j < cs; j++) {
 			if ((i < ost) || (i >= rs - ost) || (j < ost) || (j >= cs - ost)) {
@@ -260,92 +167,90 @@ void useGaussianBlur()
 			BImage.at<uchar>(i, j) = conv / kernelDiv;
 		}
 	}
+	#pragma omp barrier
 }
 
-void getGradientImg()
+void Gradient_Images()
 {
 	EMImage = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1); // Initialize the Mag output
 	EAImage = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1); // Initialize the angle output
-	sobelX = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
-	sobelY = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
 
 	if (mode == 1) {
-		float** xMask = new float* [3]; // For sobel kernal 
-		float** yMask = new float* [3];
+		float** xkernel = new float* [3]; // For sobel kernal 
+		float** ykernel = new float* [3];
 		for (int x_i = 0; x_i < 3; x_i++)
 		{
-			xMask[x_i] = new float [3];
-			yMask[x_i] = new float [3];
-			memcpy(xMask[x_i], sobelx[x_i], 3 * sizeof(float));
-			memcpy(yMask[x_i], sobely[x_i], 3 * sizeof(float));
+			xkernel[x_i] = new float [3];
+			ykernel[x_i] = new float [3];
+			memcpy(xkernel[x_i], sobelx[x_i], 3 * sizeof(float));
+			memcpy(ykernel[x_i], sobely[x_i], 3 * sizeof(float));
 		}
 		
-		convuloution(xMask, yMask, 1, 3);
+		convuloution(xkernel, ykernel, 1, 3);
 	}
 	else if (mode == 2)
 	{
-		float** xMask = new float*[3]; // for prewitt
-		float** yMask = new float*[3];
+		float** xkernel = new float*[3]; // for prewitt
+		float** ykernel = new float*[3];
 		for (int x_i = 0; x_i < 3; x_i++)
 		{
-			xMask[x_i] = new float[3];
-			yMask[x_i] = new float[3];
-			memcpy(xMask[x_i], prewittx[x_i], 3 * sizeof(float));
-			memcpy(yMask[x_i], prewitty[x_i], 3 * sizeof(float));
+			xkernel[x_i] = new float[3];
+			ykernel[x_i] = new float[3];
+			memcpy(xkernel[x_i], prewittx[x_i], 3 * sizeof(float));
+			memcpy(ykernel[x_i], prewitty[x_i], 3 * sizeof(float));
 		}
 
-		convuloution(xMask, yMask, 1, 3);
+		convuloution(xkernel, ykernel, 1, 3);
 	}
 	else if (mode == 3)
 	{
-		float** xMask = new float*[2]; // for robert
-		float** yMask = new float*[2];
+		float** xkernel = new float*[2]; // for robert
+		float** ykernel = new float*[2];
 		for (int x_i = 0; x_i < 2; x_i++)
 		{
-			xMask[x_i] = new float[2];
-			yMask[x_i] = new float[2];
-			memcpy(xMask[x_i], robertsx[x_i], 2 * sizeof(float));
-			memcpy(yMask[x_i], robertsy[x_i], 2 * sizeof(float));
+			xkernel[x_i] = new float[2];
+			ykernel[x_i] = new float[2];
+			memcpy(xkernel[x_i], robertsx[x_i], 2 * sizeof(float));
+			memcpy(ykernel[x_i], robertsy[x_i], 2 * sizeof(float));
 		}
 
-		convuloution_2(xMask, yMask, 1, 2);
+		convuloution_2(xkernel, ykernel, 1, 2);
 	}
 	else if (mode == 4)
 	{
-		float** xMask = new float*[5]; // for 5*5 sobel
-		float** yMask = new float*[5];
+		float** xkernel = new float*[5]; // for 5*5 sobel
+		float** ykernel = new float*[5];
 		for (int x_i = 0; x_i < 5; x_i++)
 		{
-			xMask[x_i] = new float[5];
-			yMask[x_i] = new float[5];
-			memcpy(xMask[x_i], sobel5x[x_i], 5 * sizeof(float));
-			memcpy(yMask[x_i], sobel5y[x_i], 5 * sizeof(float));
+			xkernel[x_i] = new float[5];
+			ykernel[x_i] = new float[5];
+			memcpy(xkernel[x_i], sobel5x[x_i], 5 * sizeof(float));
+			memcpy(ykernel[x_i], sobel5y[x_i], 5 * sizeof(float));
 		}
 
-		convuloution_5(xMask, yMask, 2, 5);
+		convuloution_5(xkernel, ykernel, 2, 5);
 	}
 
 	else {
-		float** xMask = new float*[3]; //  for scharr
-		float** yMask = new float*[3];
+		float** xkernel = new float*[3]; //  for scharr
+		float** ykernel = new float*[3];
 		for (int x_i = 0; x_i < 3; x_i++)
 		{
-			xMask[x_i] = new float[3];
-			yMask[x_i] = new float[3];
-			memcpy(xMask[x_i], scharrx[x_i], 3 * sizeof(float));
-			memcpy(yMask[x_i], scharry[x_i], 3 * sizeof(float));
+			xkernel[x_i] = new float[3];
+			ykernel[x_i] = new float[3];
+			memcpy(xkernel[x_i], scharrx[x_i], 3 * sizeof(float));
+			memcpy(ykernel[x_i], scharry[x_i], 3 * sizeof(float));
 		}
 
-		convuloution(xMask, yMask, 1, 3);
+		convuloution(xkernel, ykernel, 1, 3);
 	}
 }
 
 // covolution functions for gradient caluate.
-void convuloution(float** xMask, float** yMask, int sobelRad, int sobelWidth)
+void convuloution(float** xkernel, float** ykernel, int sobelRad, int sobelWidth)
 {	
 
 	int sumGradient = 0;
-
 
     #pragma omp parallel for num_threads(4)
 	for (int i = 0; i < BImage.rows; i++)
@@ -357,8 +262,6 @@ void convuloution(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 			{
 				EMImage.at<uchar>(i, j) = 0;
 				EAImage.at<uchar>(i, j) = 255;
-				sobelX.at<uchar>(i, j) = 0;
-				sobelY.at<uchar>(i, j) = 0;
 				//printf("%d\t%d\n", i, j);
 			}
 			else
@@ -369,8 +272,8 @@ void convuloution(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				for (int x = 0; x < sobelWidth; x++)
 					for (int y = 0; y < sobelWidth; y++)
 					{
-						sumX += xMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
-						sumY += yMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						sumX += xkernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						sumY += ykernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
 					}
 
 				int mag = sqrt(sumX*sumX + sumY * sumY);
@@ -378,36 +281,6 @@ void convuloution(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				EMImage.at<uchar>(i, j) = mag;
 
 				sumGradient += mag;
-				//Process sobel X
-				if (sumX < 0) {
-					if (sumX < -255 || sumX == -255) {
-						sobelX.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelX.at<uchar>(i, j) = sumX * (-1);
-					}
-				}
-				else if (sumX > 255 || sumX == 255) {
-					sobelX.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelX.at<uchar>(i, j) = sumX;
-				}
-				//Process soble Y
-				if (sumY < 0) {
-					if (sumY < -255 || sumY == -255) {
-						sobelY.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelY.at<uchar>(i, j) = sumY * (-1);
-					}
-				}
-				else if (sumY > 255 || sumY == 255) {
-					sobelY.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelY.at<uchar>(i, j) = sumY;
-				}
 
 				int ang = (atan2(sumY, sumX) / M_PI) * 180;
 				// Angle
@@ -447,7 +320,7 @@ void convuloution(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 	printf("average gradient: %.2f\n", var);
 }
 
-void convuloution_2(float** xMask, float** yMask, int sobelRad, int sobelWidth)
+void convuloution_2(float** xkernel, float** ykernel, int sobelRad, int sobelWidth)
 {
 
 	int sumGradient = 0;
@@ -463,8 +336,6 @@ void convuloution_2(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 			{
 				EMImage.at<uchar>(i, j) = 0;
 				EAImage.at<uchar>(i, j) = 255;
-				sobelX.at<uchar>(i, j) = 0;
-				sobelY.at<uchar>(i, j) = 0;
 				//printf("%d\t%d\n", i, j);
 			}
 			else
@@ -475,9 +346,9 @@ void convuloution_2(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				for (int x = 0; x < sobelWidth; x++)
 					for (int y = 0; y < sobelWidth; y++)
 					{
-						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, xMask[x][y], yMask[x][y]);
-						sumX += xMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
-						sumY += yMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, xkernel[x][y], ykernel[x][y]);
+						sumX += xkernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						sumY += ykernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
 						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, sumX, sumY);
 					}
 
@@ -486,36 +357,6 @@ void convuloution_2(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				EMImage.at<uchar>(i, j) = mag;
 
 				sumGradient += mag;
-				//Process sobel X
-				if (sumX < 0) {
-					if (sumX < -255 || sumX == -255) {
-						sobelX.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelX.at<uchar>(i, j) = sumX * (-1);
-					}
-				}
-				else if (sumX > 255 || sumX == 255) {
-					sobelX.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelX.at<uchar>(i, j) = sumX;
-				}
-				//Process soble Y
-				if (sumY < 0) {
-					if (sumY < -255 || sumY == -255) {
-						sobelY.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelY.at<uchar>(i, j) = sumY * (-1);
-					}
-				}
-				else if (sumY > 255 || sumY == 255) {
-					sobelY.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelY.at<uchar>(i, j) = sumY;
-				}
 
 				int ang = (atan2(sumY, sumX) / M_PI) * 180;
 				// Angle
@@ -553,7 +394,7 @@ void convuloution_2(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 	printf("average gradient: %.2f\n", var);
 }
 
-void convuloution_5(float** xMask, float** yMask, int sobelRad, int sobelWidth)
+void convuloution_5(float** xkernel, float** ykernel, int sobelRad, int sobelWidth)
 {
 
 	int sumGradient = 0;
@@ -567,8 +408,6 @@ void convuloution_5(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 			{
 				EMImage.at<uchar>(i, j) = 0;
 				EAImage.at<uchar>(i, j) = 255;
-				sobelX.at<uchar>(i, j) = 0;
-				sobelY.at<uchar>(i, j) = 0;
 				//printf("%d\t%d\n", i, j);
 			}
 			else
@@ -579,9 +418,9 @@ void convuloution_5(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				for (int x = 0; x < sobelWidth; x++)
 					for (int y = 0; y < sobelWidth; y++)
 					{
-						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, xMask[x][y], yMask[x][y]);
-						sumX += xMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
-						sumY += yMask[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, xkernel[x][y], ykernel[x][y]);
+						sumX += xkernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
+						sumY += ykernel[x][y] * BImage.at<uchar>(i + x - sobelRad, j + y - sobelRad);
 						//printf("%d\t%d\t%d\t%d%d\t%d\n", i, j, x, y, sumX, sumY);
 					}
 
@@ -590,36 +429,7 @@ void convuloution_5(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 				EMImage.at<uchar>(i, j) = mag;
 
 				sumGradient += mag;
-				//Process sobel X
-				if (sumX < 0) {
-					if (sumX < -255 || sumX == -255) {
-						sobelX.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelX.at<uchar>(i, j) = sumX * (-1);
-					}
-				}
-				else if (sumX > 255 || sumX == 255) {
-					sobelX.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelX.at<uchar>(i, j) = sumX;
-				}
-				//Process soble Y
-				if (sumY < 0) {
-					if (sumY < -255 || sumY == -255) {
-						sobelY.at<uchar>(i, j) = 255;
-					}
-					else {
-						sobelY.at<uchar>(i, j) = sumY * (-1);
-					}
-				}
-				else if (sumY > 255 || sumY == 255) {
-					sobelY.at<uchar>(i, j) = 255;
-				}
-				else {
-					sobelY.at<uchar>(i, j) = sumY;
-				}
+				
 
 				int ang = (atan2(sumY, sumX) / M_PI) * 180;
 				//  Angle
@@ -657,27 +467,12 @@ void convuloution_5(float** xMask, float** yMask, int sobelRad, int sobelWidth)
 	printf("average gradient: %.2f\n", var);
 }
 
-//float** matrixgenerator(int col, int row)
-//{
-//	float** xMask = new float*[3];
-//	float** yMask = new float*[3];
-//	for (int x_i = 0; x_i < 3; x_i++)
-//	{
-//		xMask[x_i] = new float[3];
-//		yMask[x_i] = new float[3];
-//	}
-//	memcpy(xMask, scharrx, 9 * sizeof(float));
-//	memcpy(yMask, scharry, 9 * sizeof(float));
-//}
-
-
-
-void nonMaxSuppress()
+void NonMaxSuppress()
 {
-	std::cout << "performing nonMaxSuppress" << std::endl;
 	TEImage = EMImage.clone();
 	int m = TEImage.rows, n = TEImage.cols;
 
+	#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < m; i++)
 	{
 		for (int j = 0; j < n; j++)
@@ -712,24 +507,25 @@ void nonMaxSuppress()
 			}
 		}
 	}
+	#pragma omp barrier
 }
 
 
 
 
 
-void lessHysteresisThreshold(int lowTh, int highTh)
+void DoubleThreshold_Hysteresis(int lowTh, int highthreshold)
 {
-	thresholdImage = TEImage.clone();
+	DTImage = TEImage.clone();
 
-	for (int i = 0; i < thresholdImage.rows; i++)
+	for (int i = 0; i < DTImage.rows; i++)
 	{
-		for (int j = 0; j < thresholdImage.cols; j++)
+		for (int j = 0; j < DTImage.cols; j++)
 		{
-			if (TEImage.at<uchar>(i, j) > highTh)
-				thresholdImage.at<uchar>(i, j) = 255;
+			if (TEImage.at<uchar>(i, j) > highthreshold)
+				DTImage.at<uchar>(i, j) = 255;
 			else if (TEImage.at<uchar>(i, j) < lowTh)
-				thresholdImage.at<uchar>(i, j) = 0;
+				DTImage.at<uchar>(i, j) = 0;
 			else
 			{
 				bool isHigher = false;
@@ -738,17 +534,17 @@ void lessHysteresisThreshold(int lowTh, int highTh)
 				{
 					for (int y = j - 1; y < j + 2; y++)
 					{
-						if (x <= 0 || y <= 0 || x > thresholdImage.rows || y > thresholdImage.cols)
+						if (x <= 0 || y <= 0 || x > DTImage.rows || y > DTImage.cols)
 							continue;
 						else
 						{
-							if (TEImage.at<uchar>(x, y) > highTh)
+							if (TEImage.at<uchar>(x, y) > highthreshold)
 							{
-								thresholdImage.at<uchar>(i, j) = 255;
+								DTImage.at<uchar>(i, j) = 255;
 								isHigher = true;
 								break;
 							}
-							else if (TEImage.at<uchar>(x, y) <= highTh && TEImage.at<uchar>(x, y) >= lowTh)
+							else if (TEImage.at<uchar>(x, y) <= highthreshold && TEImage.at<uchar>(x, y) >= lowTh)
 								doConnect = true;
 						}
 					}
@@ -759,13 +555,13 @@ void lessHysteresisThreshold(int lowTh, int highTh)
 					{
 						for (int y = j - 2; y < j + 3; y++)
 						{
-							if (x < 0 || y < 0 || x > thresholdImage.rows || y > thresholdImage.cols)
+							if (x < 0 || y < 0 || x > DTImage.rows || y > DTImage.cols)
 								continue;
 							else
 							{
-								if (TEImage.at<uchar>(x, y) > highTh)
+								if (TEImage.at<uchar>(x, y) > highthreshold)
 								{
-									thresholdImage.at<uchar>(i, j) = 255;
+									DTImage.at<uchar>(i, j) = 255;
 									isHigher = true;
 									break;
 								}
@@ -773,153 +569,10 @@ void lessHysteresisThreshold(int lowTh, int highTh)
 						}
 						if (isHigher)    break;
 					}
-				if (!isHigher)   thresholdImage.at<uchar>(i, j) = 0;
+				if (!isHigher)   DTImage.at<uchar>(i, j) = 0;
 			}
 		}
 	}
-}
-
-void moreHysteresisThreshold()
-{
-	lowTho = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
-	highTho = Mat::zeros(BImage.rows, BImage.cols, CV_8UC1);
-	Mat avg = Mat::zeros(BImage.rows, BImage.cols, CV_32FC1);
-	Mat var = Mat::zeros(BImage.rows, BImage.cols, CV_32FC1);
-
-	for (int i = 0; i < BImage.rows; i++) {
-		for (int j = 0; j < BImage.cols; j++) {
-
-			float sumGra = 0;
-			for (int x = i - 10; x < i + 11; x++) {
-				for (int y = j - 10; y < j + 11; y++) {
-					float gra;
-					if (x < 0 || y < 0) {
-						gra = 0;
-					}
-					else {
-						gra = EMImage.at<uchar>(x, y);
-					}
-
-					sumGra += gra;
-				}
-			}
-			avg.at<float>(i, j) = sumGra / float(21 * 21);
-			//printf("%0.2f ", avg.at<float>(i,j));
-		}
-	}
-
-	for (int i = 0; i < BImage.rows; i++) {
-		for (int j = 0; j < BImage.cols; j++) {
-
-			float sumVar = 0;
-			for (int x = i - 10; x < i + 11; x++) {
-				for (int y = j - 10; y < j + 11; y++) {
-					float gra;
-					if (x < 0 || y < 0) {
-						gra = 0;
-					}
-					else {
-						gra = EMImage.at<uchar>(x, y);
-					}
-
-					sumVar += (gra - avg.at<float>(i, j))*(gra - avg.at<float>(i, j));
-				}
-			}
-			var.at<float>(i, j) = sqrt(sumVar / float(21 * 21));
-			//printf("%0.2f ", var.at<float>(i,j));
-		}
-	}
-
-	int lowTh, highTh;
-	thresholdImage = TEImage.clone();
-
-	for (int i = 0; i < thresholdImage.rows; i++)
-	{
-		for (int j = 0; j < thresholdImage.cols; j++)
-		{
-			highTh = int(avg.at<float>(i, j) + 1.1*var.at<float>(i, j));
-			lowTh = highTh / 2;
-
-			if (TEImage.at<uchar>(i, j) < int(avg.at<float>(i, j) / 5)) {
-				thresholdImage.at<uchar>(i, j) = 0;
-			}
-			else { //added
-
-				if (TEImage.at<uchar>(i, j) > highTh)
-					thresholdImage.at<uchar>(i, j) = 255;
-				else if (TEImage.at<uchar>(i, j) < lowTh)
-					thresholdImage.at<uchar>(i, j) = 0;
-				else
-				{
-					bool isHigher = false;
-					bool doConnect = false;
-					for (int x = i - 1; x < i + 2; x++)
-					{
-						for (int y = j - 1; y < j + 2; y++)
-						{
-							if (x <= 0 || y <= 0 || x > thresholdImage.rows || y > thresholdImage.cols)
-								continue;
-							else
-							{
-								if (TEImage.at<uchar>(x, y) > highTh)
-								{
-									thresholdImage.at<uchar>(i, j) = 255;
-									isHigher = true;
-									break;
-								}
-								else if (TEImage.at<uchar>(x, y) <= highTh && TEImage.at<uchar>(x, y) >= lowTh)
-									doConnect = true;
-							}
-						}
-						if (isHigher)    break;
-					}
-					if (!isHigher && doConnect)
-						for (int x = i - 2; x < i + 3; x++)
-						{
-							for (int y = j - 2; y < j + 3; y++)
-							{
-								if (x < 0 || y < 0 || x > thresholdImage.rows || y > thresholdImage.cols)
-									continue;
-								else
-								{
-									if (TEImage.at<uchar>(x, y) > highTh)
-									{
-										thresholdImage.at<uchar>(i, j) = 255;
-										isHigher = true;
-										break;
-									}
-								}
-							}
-							if (isHigher)    break;
-						}
-					if (!isHigher)   thresholdImage.at<uchar>(i, j) = 0;
-				}
-			}//added
-		}
-	}
-}
-
-Mat combineImage()
-{
-	Mat h1CombineImage, h2CombineImage, allImage;
-	Mat extraImage = Mat(OImage.rows, OImage.cols, CV_8UC1, Scalar(255));
-	char sigmaChar[10];
-	sprintf_s(sigmaChar, "%.2f", sigma);
-
-	putText(extraImage, "Ori, Gaus, Grad, Grad X", Point(10, 20), FONT_HERSHEY_PLAIN, 1, Scalar(0));
-	putText(extraImage, "NMS, Threshold, White, Grad Y", Point(10, 38), FONT_HERSHEY_PLAIN, 1, Scalar(0));
-	putText(extraImage, "Sigma: ", Point(10, 56), FONT_HERSHEY_PLAIN, 1, Scalar(0));
-	putText(extraImage, sigmaChar, Point(65, 56), FONT_HERSHEY_PLAIN, 1, Scalar(0));
-
-	hconcat(OImage, BImage, h1CombineImage);
-	hconcat(h1CombineImage, EMImage, h1CombineImage);
-	hconcat(h1CombineImage, sobelY, h1CombineImage);
-	hconcat(TEImage, thresholdImage, h2CombineImage);
-	hconcat(h2CombineImage, extraImage, h2CombineImage);
-	hconcat(h2CombineImage, sobelX, h2CombineImage);
-	vconcat(h1CombineImage, h2CombineImage, allImage);
-
-	return allImage;
 }
 
 bool checkExistence(std::string filename)
