@@ -511,7 +511,7 @@ void NonMaxSuppress()
 
 
 
-void DoubleThreshold_Hysteresis(int lowTh, int highthreshold)
+void DoubleThreshold_Hysteresis(int low, int high)
 {
 	DTImage = TEImage.clone();
 
@@ -519,14 +519,14 @@ void DoubleThreshold_Hysteresis(int lowTh, int highthreshold)
 	{
 		for (int j = 0; j < DTImage.cols; j++)
 		{
-			if (TEImage.at<uchar>(i, j) > highthreshold)
+			if (TEImage.at<uchar>(i, j) > high)
 				DTImage.at<uchar>(i, j) = 255;
-			else if (TEImage.at<uchar>(i, j) < lowTh)
+			else if (TEImage.at<uchar>(i, j) < low)
 				DTImage.at<uchar>(i, j) = 0;
 			else
 			{
-				bool isHigher = false;
-				bool doConnect = false;
+				bool strong = false; // c
+				bool weakLink = false;// c
 				for (int x = i - 1; x < i + 2; x++)
 				{
 					for (int y = j - 1; y < j + 2; y++)
@@ -535,19 +535,19 @@ void DoubleThreshold_Hysteresis(int lowTh, int highthreshold)
 							continue;
 						else
 						{
-							if (TEImage.at<uchar>(x, y) > highthreshold)
+							if (TEImage.at<uchar>(x, y) > high)
 							{
 								DTImage.at<uchar>(i, j) = 255;
-								isHigher = true;
+								strong = true;
 								break;
 							}
-							else if (TEImage.at<uchar>(x, y) <= highthreshold && TEImage.at<uchar>(x, y) >= lowTh)
-								doConnect = true;
+							else if (TEImage.at<uchar>(x, y) <= high && TEImage.at<uchar>(x, y) >= low)
+								weakLink = true;
 						}
 					}
-					if (isHigher)    break;
+					if (strong)    break;
 				}
-				if (!isHigher && doConnect)
+				if (!strong && weakLink)
 					for (int x = i - 2; x < i + 3; x++)
 					{
 						for (int y = j - 2; y < j + 3; y++)
@@ -556,17 +556,17 @@ void DoubleThreshold_Hysteresis(int lowTh, int highthreshold)
 								continue;
 							else
 							{
-								if (TEImage.at<uchar>(x, y) > highthreshold)
+								if (TEImage.at<uchar>(x, y) > high)
 								{
 									DTImage.at<uchar>(i, j) = 255;
-									isHigher = true;
+									strong = true;
 									break;
 								}
 							}
 						}
-						if (isHigher)    break;
+						if (strong)    break;
 					}
-				if (!isHigher)   DTImage.at<uchar>(i, j) = 0;
+				if (!strong)   DTImage.at<uchar>(i, j) = 0;
 			}
 		}
 	}
